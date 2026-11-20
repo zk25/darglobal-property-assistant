@@ -1,5 +1,0 @@
-fastapi==0.163.2
-uvicorn==0.54.0
-httpx==0.28.1
-scikit-learn==1.9.1
-numpy>=2.0
