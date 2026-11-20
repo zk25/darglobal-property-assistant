@@ -1,0 +1,103 @@
+[
+  {
+    "site": "DarGlobal",
+    "saved": [
+      "https://darglobal.co.uk/why-invest",
+      "https://darglobal.co.uk/hospitality",
+      "https://darglobal.co.uk/tokenization",
+      "https://darglobal.co.uk/press",
+      "https://darglobal.co.uk/aida-trump-international-hotel",
+      "https://darglobal.co.uk/les-vagues",
+      "https://darglobal.co.uk/one-of-one/project-pagani",
+      "https://darglobal.co.uk/pay-online",
+      "https://darglobal.co.uk/get-in-touch",
+      "https://darglobal.co.uk/trump-international-hotel-and-tower-dubai",
+      "https://darglobal.co.uk/landing-page/aida",
+      "https://darglobal.co.uk/trump-tower-jeddah",
+      "https://darglobal.co.uk/press/qatari-diar-darglobal-trump-international-golf-club-villas-simaisma",
+      "https://darglobal.co.uk/press/dar-global-trump-organization-successful-launch-trump-international-simaisma-qatar-700-million",
+      "https://darglobal.co.uk/press/dar-global-expands-saudi-arabia-portfolio-with-new-jeddah-development-valued-at-sar-1-billion",
+      "https://darglobal.co.uk/press/dar-global-capital-partners-targets-high-value-real-estate-opportunities-dubai",
+      "https://darglobal.co.uk/press/dar-global-opens-sales-trump-villas-simaisma-qatar-unprecedented-interest",
+      "https://darglobal.co.uk/press/dar-global-delivers-66-percent-revenue-growth-hy-2026-portfolio-gdv-reaches-23-billion",
+      "https://darglobal.co.uk/press/dar-global-appoints-gulf-asia-contracting-for-trump-international-hotel-tower-dubai",
+      "https://darglobal.co.uk/press/darglobal-fendi-casa-announce-azure-oceanfront-villas-oman",
+      "https://darglobal.co.uk/press/dar-global-awards-sar-338-million-rayana-master-community-infrastructure-contract-compass-bin-omairah-wadi-safar-diriyah-riyadh",
+      "https://darglobal.co.uk/press/darglobal-five-years-global-expansion-23bn-development-portfolio-future-vision",
+      "https://darglobal.co.uk/press/emirates-nbd-usd-250m-syndicated-loan-dar-global-expansion-uae",
+      "https://darglobal.co.uk/press/darglobal-art-district-real-estate-mad-muscat-marine-art-digital-district",
+      "https://darglobal.co.uk/press/darglobal-appoints-al-dahlawi-contracting-for-amaya-project-trump-plaza-jeddah",
+      "https://darglobal.co.uk/press/dar-global-17-3-roe-2025-strong-market-position",
+      "https://darglobal.co.uk/press/darglobal-strengthens-china-partnerships-saudi-real-estate-global-investors",
+      "https://darglobal.co.uk/Trump-International-Hotel-Tower-Dubai?slug=aida-trump-international-hotel"
+    ],
+    "skipped": [
+      {
+        "url": "https://darglobal.co.uk",
+        "reason": "little text (likely rendered by JavaScript)"
+      },
+      {
+        "url": "https://darglobal.co.uk/about",
+        "reason": "little text (likely rendered by JavaScript)"
+      },
+      {
+        "url": "https://darglobal.co.uk/projects",
+        "reason": "little text (likely rendered by JavaScript)"
+      },
+      {
+        "url": "https://darglobal.co.uk/investor",
+        "reason": "little text (likely rendered by JavaScript)"
+      },
+      {
+        "url": "https://darglobal.co.uk/luxury-golf-communities",
+        "reason": "little text (likely rendered by JavaScript)"
+      },
+      {
+        "url": "https://darglobal.co.uk/exclusive-membership",
+        "reason": "little text (likely rendered by JavaScript)"
+      },
+      {
+        "url": "https://darglobal.co.uk/trump-tower-jeddah-preview",
+        "reason": "HTTP 404"
+      },
+      {
+        "url": "https://darglobal.co.uk/trump-international-resort-maldives",
+        "reason": "HTTP 404"
+      },
+      {
+        "url": "https://darglobal.co.uk/rayana/trump-mansions",
+        "reason": "little text (likely rendered by JavaScript)"
+      },
+      {
+        "url": "https://darglobal.co.uk/trump-plaza/executive-residences",
+        "reason": "little text (likely rendered by JavaScript)"
+      },
+      {
+        "url": "https://darglobal.co.uk/press/world-liberty-financial-tokenizes-trump-international-hotel-maldives",
+        "reason": "HTTP 404"
+      },
+      {
+        "url": "https://darglobal.co.uk/product-category/aida-trump-international-hotel",
+        "reason": "little text (likely rendered by JavaScript)"
+      }
+    ]
+  },
+  {
+    "site": "Wasalt",
+    "saved": [],
+    "skipped": [
+      {
+        "url": "https://wasalt.sa/en",
+        "reason": "HTTP 403"
+      },
+      {
+        "url": "https://wasalt.sa/en/corporate",
+        "reason": "HTTP 403"
+      },
+      {
+        "url": "https://wasalt.com/en/about",
+        "reason": "HTTP 403"
+      }
+    ]
+  }
+]
