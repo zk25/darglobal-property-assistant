@@ -1,0 +1,11 @@
+---
+title: Dar Global Appoints Gulf Asia for Trump Tower Dubai
+source: https://darglobal.co.uk/press/dar-global-appoints-gulf-asia-contracting-for-trump-international-hotel-tower-dubai
+site: DarGlobal
+scraped_at: 2026-11-20
+---
+
+# Dar Global Appoints Gulf Asia for Trump Tower Dubai
+
+## Dar Global appoints Gulf Asia Contracting for Trump International Hotel & Tower, Dubai
+Dar Global, the London-listed luxury real estate developer, has awarded the construction contract to Gulf Asia Contracting for the podium of Trump International Hotel & Tower, Dubai. Following the successful completion of all enabling works, due in September 2026, this appointment marks the project's transition into the next stage of construction and another significant milestone in the delivery of one of Dubai's most anticipated luxury developments. Located on Sheikh Zayed Road at the gateway to Downtown Dubai, the landmark development continues to progress on schedule as construction advances into its next phase. The appointment reinforces Dar Global's commitment to partnering with leading regional contractors to deliver exceptional quality across every stage of development. Ziad El Chaar, CEO of Dar Global, said: “Following the successful completion of our enabling works, we are pleased to appoint Gulf Asia Contracting to deliver the podium construction for Trump International Hotel & Tower, Dubai. This marks another important milestone as the project continues to progress according to plan and reflects our commitment to partnering with leading contractors to deliver exceptional quality throughout every stage of development.” Introduced in April 2025, Trump International Hotel & Tower, Dubai is set to become a defining addition to Dubai's skyline. Rising approximately 350 metres across 80 floors, the development combines world-class hospitality, branded residences and an exclusive private members' club. Designed to set a new benchmark for luxury living, the tower will feature Dubai's highest outdoor swimming pool, two signature penthouses inspired by New York's iconic Trump Tower on Fifth Avenue, and uninterrupted views across Burj Khalifa, Downtown Dubai and the Arabian Gulf. The latest construction milestone reflects the continued momentum of the project as Dar Global advances the development in line with its delivery programme.

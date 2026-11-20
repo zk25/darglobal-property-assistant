@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#eef2f9">
+<meta name="description" content="Explore DarGlobal's branded residences and ask about projects, residency options and Wasalt's property services.">
+<title>Property Assistant · DarGlobal &amp; Wasalt</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%232e5bff'/%3E%3Cpath d='M9 24V13l7-5 7 5v11h-5v-6h-4v6z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 20V10l7-5 7 5v10h-5v-6h-4v6z" fill="#fff"/></svg></span>
+      <span class="brand-text"><strong>Property Assistant</strong><small>DarGlobal · Wasalt</small></span>
+    </div>
+    <div class="market">
+      <button type="button" class="market-btn" id="market-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="market-menu">
+        <span class="market-pin" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11.5a7 7 0 0 1 14 0C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span>
+        <span class="market-text"><small>Market</small><b id="market-label">All markets</b></span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="market-menu" id="market-menu" role="listbox" aria-label="Choose a market" hidden></div>
+    </div>
+    <div class="top-actions">
+      <button class="round-btn" type="button" data-nav="saved" aria-label="Saved projects" title="Saved">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>
+        <span class="count" data-saved-count hidden></span>
+      </button>
+      <button class="round-btn" id="new-chat" type="button" aria-label="New chat" title="New chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Assistant -->
+    <section class="view view-assistant" id="view-assistant" data-view="assistant">
+      <div class="chat-scroll" id="scroller">
+        <div class="chat" id="thread" aria-live="polite">
+          <div class="home" id="welcome">
+            <p class="eyebrow"><span class="spark" aria-hidden="true"></span>Property assistant</p>
+            <h1>Where would you like to own next?</h1>
+            <p class="lede">Ask about DarGlobal's branded residences in the UAE, Saudi Arabia, Oman, Qatar, Spain and London, residency options for buyers, or Wasalt's property services in Saudi Arabia.</p>
+            <div class="quick" id="topics"></div>
+            <div class="section-head">
+              <h2>Featured projects</h2>
+              <button type="button" class="link-btn" data-nav="explore">View all on map</button>
+            </div>
+            <div class="rail" id="featured"></div>
+            <div class="more" id="more"></div>
+          </div>
+        </div>
+      </div>
+      <div class="composer-wrap">
+        <form class="composer" id="form" autocomplete="off">
+          <textarea id="input" rows="1" maxlength="1000" placeholder="Ask about a project, city or Wasalt…" aria-label="Your question"></textarea>
+          <button class="send" id="send" type="submit" aria-label="Send" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </form>
+        <p class="note">Based on public information from darglobal.co.uk and wasalt.sa. Independent demo, not an official DarGlobal or Wasalt service.</p>
+      </div>
+    </section>
+
+    <!-- Explore -->
+    <section class="view view-explore" id="view-explore" data-view="explore" hidden>
+      <div class="explore">
+        <div class="map-panel">
+          <div id="map" aria-label="Map of DarGlobal projects"></div>
+          <div class="map-card" id="map-card" hidden></div>
+          <p class="map-note">Pins show approximate locations</p>
+        </div>
+        <div class="list-panel">
+          <label class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="search" type="search" placeholder="Search projects, cities or brands" aria-label="Search projects">
+          </label>
+          <div class="filters" id="filters" role="tablist" aria-label="Filter by country"></div>
+          <div class="list-head"><h2 id="result-count">Projects</h2></div>
+          <div class="cards" id="cards"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Saved -->
+    <section class="view view-saved" id="view-saved" data-view="saved" hidden>
+      <div class="saved">
+        <h1>Saved projects</h1>
+        <p class="lede">Tap the heart on any project to keep it here.</p>
+        <div class="cards" id="saved-cards"></div>
+        <div class="empty" id="saved-empty">
+          <span class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>
+          <p>No saved projects yet.</p>
+          <button type="button" class="btn primary" data-nav="explore">Explore projects</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="dock" aria-label="Sections">
+    <button type="button" data-nav="explore" aria-label="Explore" data-tip="Explore">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+    </button>
+    <button type="button" data-nav="assistant" class="dock-main" aria-label="Assistant" data-tip="Assistant">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/></svg>
+    </button>
+    <button type="button" data-nav="saved" aria-label="Saved" data-tip="Saved">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>
+      <span class="dot" data-saved-dot hidden></span>
+    </button>
+  </nav>
+
+  <div class="sheet-backdrop" id="sheet" hidden>
+    <article class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"></article>
+  </div>
+</div>
+
+<script src="/static/vendor/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
