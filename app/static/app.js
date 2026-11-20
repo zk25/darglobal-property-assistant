@@ -459,10 +459,9 @@
     const sizePins = () => map.getContainer().classList.toggle("zoomed-out", map.getZoom() < 10);
     map.on("zoomend", sizePins);
     map.whenReady(sizePins);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      subdomains: "abcd",
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
     state.map = map;
     state.projects.forEach((p) => {
