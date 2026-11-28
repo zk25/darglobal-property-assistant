@@ -32,6 +32,13 @@ class LLMAuthError(LLMError):
     pass
 
 
+def _error_text(error) -> str:
+    """Providers send errors either as {"message": ...} or as a plain string."""
+    if isinstance(error, dict):
+        return str(error.get("message") or "error")
+    return str(error)[:160]
+
+
 class ThinkFilter:
     """Removes <think>...</think> blocks from streamed text, even when tags are split across chunks."""
 
@@ -181,11 +188,11 @@ class OpenRouterClient:
             return None
         try:
             data = resp.json()
-            if "error" in data:
-                errors.append(f"{model}: {data['error'].get('message', 'error')}")
+            if data.get("error"):
+                errors.append(f"{model}: {_error_text(data['error'])}")
                 return None
             content = data["choices"][0]["message"].get("content") or ""
-        except (ValueError, KeyError, IndexError, TypeError):
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             errors.append(f"{model}: malformed response")
             return None
         content = THINK_RE.sub("", content).strip()
@@ -196,24 +203,34 @@ class OpenRouterClient:
     # ---- streaming -------------------------------------------------------
 
     async def stream(self, messages: list[dict]) -> AsyncIterator[tuple[str, str]]:
-        """Yield ("model", id) once, then ("delta", text) pieces. Raises LLMError if no model answers."""
+        """Yield ("model", id) once, then ("delta", text) pieces. Raises LLMError if no model answers.
+
+        If a model stops part-way through its answer, a final ("cut", id) is yielded.
+        """
         if not self.enabled:
             raise LLMError("OPENROUTER_API_KEY is not set")
         errors: list[str] = []
         async with self._client() as client:
             async for model in self._candidates(client):
                 started = False
-                async for piece in self._stream_one(client, model, messages, errors):
+                outcome = {"complete": False}
+                async for piece in self._stream_one(client, model, messages, errors, outcome):
                     if not started:
                         started = True
                         yield "model", model
                     yield "delta", piece
                 if started:
-                    self._last_good = model
+                    if outcome["complete"]:
+                        self._last_good = model
+                    else:
+                        reason = errors[-1] if errors else "the connection closed early"
+                        log.warning("Answer from %s was cut off: %s", model, reason)
+                        yield "cut", model
                     return
         raise LLMError("; ".join(errors[-4:]) or "no model available")
 
-    async def _stream_one(self, client, model, messages, errors) -> AsyncIterator[str]:
+    async def _stream_one(self, client, model, messages, errors, outcome) -> AsyncIterator[str]:
+        """Yield text pieces from one model. Sets outcome["complete"] only if the answer finished normally."""
         url = f"{API_BASE}/chat/completions"
         try:
             async with client.stream("POST", url, json=self._payload(model, messages, True)) as resp:
@@ -224,27 +241,39 @@ class OpenRouterClient:
                     errors.append(f"{model}: HTTP {resp.status_code} {body}")
                     return
                 think = ThinkFilter()
+                finished, failed = False, False
                 async for line in resp.aiter_lines():
                     if not line.startswith("data:"):
                         continue  # keep-alive comments
                     data = line[5:].strip()
                     if data == "[DONE]":
+                        finished = True
                         break
                     try:
                         event = json.loads(data)
                     except ValueError:
                         continue
-                    if "error" in event:
-                        errors.append(f"{model}: {event['error'].get('message', 'stream error')}")
+                    if not isinstance(event, dict):
+                        continue
+                    if event.get("error"):
+                        errors.append(f"{model}: {_error_text(event['error'])}")
+                        failed = True
                         break
                     choices = event.get("choices") or []
                     if not choices:
                         continue
+                    reason = choices[0].get("finish_reason")
+                    if reason == "stop":
+                        finished = True
+                    elif reason:  # "length", "error", "content_filter": the answer is incomplete
+                        errors.append(f"{model}: stopped early ({reason})")
+                        failed = True
                     text = think.feed((choices[0].get("delta") or {}).get("content") or "")
                     if text:
                         yield text
                 tail = think.flush()
                 if tail:
                     yield tail
+                outcome["complete"] = finished and not failed
         except httpx.HTTPError as exc:
             errors.append(f"{model}: {type(exc).__name__}")
