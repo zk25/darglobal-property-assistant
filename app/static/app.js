@@ -77,6 +77,7 @@
     selected: null,
     history: [],
     busy: false,
+    request: null,
     map: null,
     markers: {},
   };
@@ -348,6 +349,15 @@
     if (askBtn) { closeSheet(); go("assistant"); ask(askBtn.dataset.ask); }
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+  // While the panel is open, Tab moves only between the things inside it.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || sheetBackdrop.hidden) return;
+    const items = $$("a[href], button:not([disabled])", sheet);
+    const first = items[0], last = items[items.length - 1];
+    const outside = !sheet.contains(document.activeElement);
+    if (e.shiftKey && (outside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (outside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
+  });
 
   // ---------------------------------------------------------------------------
   // Views
@@ -356,11 +366,15 @@
     if (!["assistant", "explore", "saved"].includes(view)) view = "assistant";
     $$(".view").forEach((v) => { v.hidden = v.dataset.view !== view; });
     $$(".dock [data-nav]").forEach((b) => b.classList.toggle("active", b.dataset.nav === view));
-    if (location.hash !== `#${view}`) history.replaceState(null, "", `#${view}`);
+    if (location.hash !== `#${view}`) {
+      // Add a history entry when moving between views, so Back returns to the previous one.
+      const fromView = ["#assistant", "#explore", "#saved"].includes(location.hash);
+      history[fromView ? "pushState" : "replaceState"](null, "", `#${view}`);
+    }
     if (view === "explore") ensureMap();
     if (view === "assistant") setTimeout(() => input.focus(), 50);
   }
-  window.addEventListener("hashchange", () => go(location.hash.slice(1)));
+  window.addEventListener("hashchange", () => { closeSheet(); go(location.hash.slice(1)); });
 
   // ---------------------------------------------------------------------------
   // Explore: filters, list, map
@@ -445,13 +459,21 @@
 
   function fitTo(list) {
     if (!state.map || !list.length) return;
+    // A hidden map has no size, so fit it later, when Explore is shown.
+    if (!state.map.getContainer().offsetWidth) { state.needsFit = true; return; }
     const bounds = L.latLngBounds(list.map((p) => [p.lat, p.lng]));
     state.map.fitBounds(bounds, { padding: [60, 60], maxZoom: 12 });
   }
 
   function ensureMap() {
     if (typeof L === "undefined") { $(".map-panel").hidden = true; return; }
-    if (state.map) { setTimeout(() => state.map.invalidateSize(), 60); return; }
+    if (state.map) {
+      setTimeout(() => {
+        state.map.invalidateSize();
+        if (state.needsFit) { state.needsFit = false; fitTo(visibleProjects()); }
+      }, 60);
+      return;
+    }
     const map = L.map("map", { zoomControl: false, worldCopyJump: true, minZoom: 2 });
     L.control.zoom({ position: "topright" }).addTo(map);
     map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
@@ -663,8 +685,25 @@
     };
   }
 
-  async function streamAnswer(question, view) {
+  const IDLE_LIMIT_MS = 120000; // give up if the server sends nothing for this long
+
+  async function streamAnswer(question, view, controller) {
+    let timer = 0;
+    const restartTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort("timeout"), IDLE_LIMIT_MS);
+    };
+    restartTimer();
+    try {
+      return await readAnswer(question, view, controller.signal, restartTimer);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function readAnswer(question, view, signal, restartTimer) {
     const res = await fetch("/api/chat/stream", {
+      signal,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: question, history: state.history }),
@@ -681,6 +720,7 @@
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
+      restartTimer();
       buffer += decoder.decode(value, { stream: true });
       let cut;
       while ((cut = buffer.indexOf("\n\n")) >= 0) {
@@ -706,15 +746,21 @@
     addUserMessage(question);
     input.value = ""; autosize();
     const view = addBotMessage();
+    const controller = new AbortController();
+    state.request = controller;
     try {
-      const data = await streamAnswer(question, view);
+      const data = await streamAnswer(question, view, controller);
       view.finish(data);
       state.history.push({ role: "user", content: question }, { role: "assistant", content: plainText(data.answer) });
       state.history = state.history.slice(-12);
     } catch (err) {
-      const offline = err instanceof TypeError;
+      const reason = controller.signal.reason;
+      if (reason === "new-chat") return; // the user cleared the chat, so there is nothing to report
+      let message = err.message;
+      if (reason === "timeout") message = "The server took too long to reply. Please try again.";
+      else if (err instanceof TypeError) message = "Couldn't reach the server. Check your connection and try again.";
       view.fail(
-        offline ? "Couldn't reach the server. Check your connection and try again." : err.message,
+        message,
         err.status === 429 ? null : () => {
           const last = thread.lastElementChild;
           if (last && last.classList.contains("msg-user")) last.remove();
@@ -734,7 +780,7 @@
   });
   input.addEventListener("input", () => { autosize(); updateSend(); });
   $("#new-chat").addEventListener("click", () => {
-    if (state.busy) return;
+    if (state.busy && state.request) state.request.abort("new-chat");
     state.history = [];
     $$(".msg-user, .msg-bot, .notice", thread).forEach((n) => n.remove());
     welcome.hidden = false;
@@ -772,9 +818,13 @@
   }
 
   async function init() {
+    const getJSON = (url) => fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    });
     const [projectsRes, suggestionsRes] = await Promise.allSettled([
-      fetch("/api/projects").then((r) => r.json()),
-      fetch("/api/suggestions").then((r) => r.json()),
+      getJSON("/api/projects"),
+      getJSON("/api/suggestions"),
     ]);
     if (projectsRes.status === "fulfilled") {
       state.projects = projectsRes.value.projects || [];
@@ -786,7 +836,18 @@
     renderFilters();
     renderExplore();
     renderSaved();
-    go(location.hash.slice(1) || "assistant");
+    const failed = [projectsRes, suggestionsRes].some((r) => r.status === "rejected");
+    if (failed) showLoadError();
+    go(failed ? "assistant" : location.hash.slice(1) || "assistant");
+  }
+
+  function showLoadError() {
+    const box = document.createElement("div");
+    box.className = "notice";
+    box.setAttribute("role", "alert");
+    box.innerHTML = "<span>Some of the page didn't load. Please check your connection and reload.</span>";
+    box.appendChild(chip("Reload", () => location.reload()));
+    thread.prepend(box);
   }
 
   init();

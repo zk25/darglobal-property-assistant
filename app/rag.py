@@ -42,6 +42,10 @@ QUERY_REWRITES = [
 ]
 
 
+# Used when picking lines: "when will it be completed?" should match a "Completion: ..." line.
+COMPLETION_RE = re.compile(r"\b(complete|completed|completes|ready|delivered)\b")
+
+
 def normalize_query(query: str) -> str:
     text = query.lower()
     for pattern, repl in QUERY_REWRITES:
@@ -244,8 +248,11 @@ class KnowledgeBase:
 
     def rank_lines(self, query: str, lines: list[str]) -> np.ndarray:
         """Relevance of individual lines to the query (used for answers without the LLM)."""
-        q = self.word_vec.transform([normalize_query(query)])
-        return (self.word_vec.transform([normalize_query(l) for l in lines]) @ q.T).toarray().ravel()
+        def prepare(text: str) -> str:
+            return COMPLETION_RE.sub("completion", normalize_query(text))
+
+        q = self.word_vec.transform([prepare(query)])
+        return (self.word_vec.transform([prepare(l) for l in lines]) @ q.T).toarray().ravel()
 
     def stats(self) -> dict:
         sites: dict[str, int] = {}

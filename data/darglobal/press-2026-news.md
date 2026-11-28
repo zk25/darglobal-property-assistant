@@ -6,7 +6,7 @@ site: DarGlobal
 
 # DarGlobal news and results, 2026
 
-## Half-year results HY 2026 (interim results for the six months to 30 June 2026, published 30 September 2026, unaudited)
+## Half-year results HY 2026 (interim results for the six months to 30 June 2026, announced 24 September 2026, unaudited)
 
 - Revenue: USD 258.0 million, up 66% from USD 155.4 million in HY 2025.
 - Gross profit: USD 87.7 million, up 85%; gross margin 34% (from 31%).

@@ -26,7 +26,8 @@ log = logging.getLogger("app")
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR.parent / "data"))
 DEFAULT_MODELS = "nvidia/nemotron-3.5-super-vl:free,inclusionai/ling-3.2-flash:free,baidu/ernie-5.5-flash-preview:free"
-RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN") or "15")
+RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN") or "15")  # per visitor
+GLOBAL_LIMIT_PER_MIN = int(os.getenv("GLOBAL_LIMIT_PER_MIN") or "60")  # all visitors together
 
 CONTACTS = {
     "DarGlobal": "DarGlobal's sales team on WhatsApp +971 800 40409",
@@ -72,6 +73,13 @@ FOLLOW_UPS = {
     ],
 }
 
+CUT_OFF_NOTE = "_The answer was cut off. Please ask again._"
+GREETING_RE = re.compile(
+    r"^(?:hi+|hello+|hey+|good (?:morning|afternoon|evening)|salam|as-?salamu? ?alaikum"
+    r"|مرحبا|مرحباً|أهلا|أهلاً|اهلا|السلام عليكم)(?: there)?[\s!.,?؟]*$", re.I)
+THANKS_RE = re.compile(
+    r"^(?:thanks|thank you|thank u|thx)(?: (?:so|very) much| a lot)?[\s!.,]*$|^(?:شكرا|شكراً|شكرًا)(?: لك| جزيلا| جزيلاً)?[\s!.,]*$", re.I)
+PRONOUN_RE = re.compile(r"\b(it|its)\b", re.I)
 FOLLOW_UP_RE = re.compile(r"\b(it|its|they|them|their|there|that|this|those|these|he|she|his|her|same)\b", re.I)
 ARABIC_RE = re.compile(r"[؀-ۿ]")
 CITATION_RE = re.compile(r"\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]")
@@ -116,6 +124,7 @@ app = FastAPI(title="Property Assistant: DarGlobal & Wasalt", version="1.1.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 _requests: dict[str, deque] = defaultdict(deque)
+_all_requests: deque = deque()
 _cache: OrderedDict[str, ChatResponse] = OrderedDict()
 CACHE_SIZE = 200
 
@@ -129,12 +138,34 @@ def client_ip(request: Request) -> str:
 
 def check_rate_limit(ip: str) -> None:
     now = time.time()
+    # The visitor address comes from a request header that a client can fake,
+    # so a limit on all requests together protects the model quota as well.
+    while _all_requests and now - _all_requests[0] > 60:
+        _all_requests.popleft()
+    if len(_all_requests) >= GLOBAL_LIMIT_PER_MIN:
+        raise HTTPException(status_code=429, detail="The assistant is busy right now. Please wait a minute and try again.")
     window = _requests[ip]
     while window and now - window[0] > 60:
         window.popleft()
     if len(window) >= RATE_LIMIT_PER_MIN:
         raise HTTPException(status_code=429, detail="You're sending messages quickly. Please wait a minute and try again.")
     window.append(now)
+    _all_requests.append(now)
+
+
+def small_talk(message: str) -> str | None:
+    """A fixed reply for a bare greeting or thank-you, so no search or model call is needed."""
+    text = message.strip()
+    arabic = bool(ARABIC_RE.search(text))
+    if GREETING_RE.match(text):
+        if arabic:
+            return "أهلاً وسهلاً! يمكنني مساعدتك في مشاريع دار جلوبال وخيارات الإقامة وخدمات وصلت. ما الذي تود معرفته؟"
+        return "Hello! I can help with DarGlobal projects, residency options or Wasalt services. What would you like to know?"
+    if THANKS_RE.match(text):
+        if arabic:
+            return "على الرحب والسعة! اسألني عن مشاريع دار جلوبال أو خدمات وصلت."
+        return "You're welcome! Ask me anything else about DarGlobal projects or Wasalt services."
+    return None
 
 
 def search_with_follow_up(query: str, history: list[Turn]) -> list[tuple[Chunk, float]]:
@@ -224,19 +255,65 @@ def _repeats(line: str, used: list[str]) -> bool:
     return False
 
 
-def retrieval_answer(query: str, hits: list[tuple[Chunk, float]]) -> str:
+def chunk_projects(chunk: Chunk) -> set[str]:
+    """The project a section is about: named in its heading, or else the only project in its page title."""
+    found = projects_in(chunk.heading)
+    if not found:
+        found = projects_in(chunk.title)
+        if len(found) > 1:
+            found = []
+    return set(found)
+
+
+def has_facts(chunk: Chunk) -> bool:
+    """False for sections that are only a short label, such as a scraped card saying "Dubai, UAE"."""
+    return any(len(line.strip()) > 40 for line in chunk.text.splitlines())
+
+
+def pick_sections(asked: str, hits: list[tuple[Chunk, float]]) -> list[int]:
+    """Positions of the retrieved sections to show in an answer built without the model."""
+    wanted = set(projects_in(asked))
+    named = [i for i, (c, _) in enumerate(hits) if wanted & chunk_projects(c) and has_facts(c)]
+    if not named:
+        floor = 0.6 * hits[0][1]
+        return [i for i, (_, score) in enumerate(hits[:4]) if score >= floor][:3]
+    # A project was named: show its sections first, then only general sections that scored higher.
+    best = hits[named[0]][1]
+    named = [i for i in named if hits[i][1] >= 0.6 * best]
+    general = [i for i, (c, score) in enumerate(hits) if score > best and not chunk_projects(c)]
+    return (named + general)[:3]
+
+
+def without_project_names(query: str) -> str:
+    text = query.lower()
+    for alias in sorted((a for p in PROJECTS for a in p["aliases"]), key=len, reverse=True):
+        text = text.replace(alias, " ")
+    return text
+
+
+def retrieval_answer(query: str, hits: list[tuple[Chunk, float]], history: list[Turn] | None = None) -> str:
     """Compose a readable answer from the best-matching facts, used when no model is reachable."""
+    if not hits and ARABIC_RE.search(query):
+        return (
+            "عذراً، لم أجد إجابة. يرجى كتابة سؤالك بالإنجليزية.\n\n"
+            "Sorry, I couldn't find that. Please try asking in English, or contact "
+            f"{CONTACTS['DarGlobal']}, or {CONTACTS['Wasalt']} for Saudi property listings."
+        )
     if not hits:
         return (
             "I don't have information on that. For project details, contact "
             f"{CONTACTS['DarGlobal']}; for Saudi property listings, contact {CONTACTS['Wasalt']}."
         )
-    top = hits[0][1]
-    picked = [h for h in hits[:4] if h[1] >= 0.6 * top][:3]
+    asked = query
+    previous = [t.content for t in history or [] if t.role == "user"]
+    if previous and not projects_in(query) and PRONOUN_RE.search(query):
+        asked = previous[-1]  # "when will it be completed?" is about the project asked before
+    chosen = pick_sections(asked, hits)
     q_words = content_words(normalize_query(query))
     sections, used, labels = [], [], set()
     budget = 8  # keep fallback answers short enough to scan
-    for i, (chunk, _) in enumerate(picked, start=1):
+    for rank, position in enumerate(chosen):
+        chunk = hits[position][0]
         if budget <= 0:
             break
         lines = [re.sub(r"^[-*]\s*", "", l).strip() for l in chunk.text.splitlines()]
@@ -249,18 +326,22 @@ def retrieval_answer(query: str, hits: list[tuple[Chunk, float]]) -> str:
         if chunk.heading != chunk.title and names_section:
             best = list(range(min(6, len(lines))))  # the section is the topic: show it in order
         else:
-            scores = kb.rank_lines(query, lines)
+            about_asked = bool(set(projects_in(asked)) & set(projects_in(chunk.heading)))
+            # In the asked project's own section its name says nothing about which line is wanted.
+            scores = kb.rank_lines(without_project_names(query) if about_asked else query, lines)
             ranked = sorted(range(len(lines)), key=lambda j: -scores[j])
-            relevant = [j for j in ranked if scores[j] > 0] or ranked[:1]
-            best = sorted(relevant[:5 if i == 1 else 3])
+            relevant = [j for j in ranked if scores[j] > 0]
+            if not relevant:  # nothing matches: give an overview of the asked project, else its first best line
+                relevant = list(range(len(lines))) if about_asked else ranked[:1]
+            best = sorted(relevant[:5 if rank == 0 else 3])
         best = best[:budget]
         budget -= len(best)
         used += [lines[j] for j in best]
         label = chunk.label if chunk.label not in labels else chunk.title
         labels.add(label)
         bullets = "\n".join(f"- {lines[j]}" for j in best)
-        sections.append(f"**{label}**\n{bullets} [{i}]")
-    sites = {c.site for c, _ in picked}
+        sections.append(f"**{label}**\n{bullets} [{position + 1}]")  # the number of this note in hits
+    sites = {hits[i][0].site for i in chosen}
     site = "Wasalt" if sites == {"Wasalt"} else "DarGlobal"
     closing = (
         f"Prices and payment plans aren't published online; {CONTACTS[site]} can share them."
@@ -316,6 +397,11 @@ def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def event_stream(events) -> StreamingResponse:
+    return StreamingResponse(events, media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 # ---- routes ----------------------------------------------------------------
 
 @app.get("/")
@@ -341,6 +427,9 @@ async def suggestions() -> dict:
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     check_rate_limit(client_ip(request))
+    reply = small_talk(req.message)
+    if reply:
+        return finish(req.message, req.history, reply, [], "retrieval", None)
     message, history, query, hits, messages, cache_key = await prepare(req)
     if cache_key and cache_key in _cache:
         _cache.move_to_end(cache_key)
@@ -350,7 +439,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         response = finish(message, history, answer, hits, "llm", model)
     except LLMError as exc:
         log.warning("LLM unavailable, answering from retrieved facts: %s", exc)
-        response = finish(message, history, retrieval_answer(query, hits), hits, "retrieval", None)
+        response = finish(message, history, retrieval_answer(query, hits, history), hits, "retrieval", None)
     remember(cache_key, response)
     return response
 
@@ -359,6 +448,10 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     """Server-sent events: `delta` events with answer text, then one `done` event with the final answer and sources."""
     check_rate_limit(client_ip(request))
+    reply = small_talk(req.message)
+    if reply:
+        response = finish(req.message, req.history, reply, [], "retrieval", None)
+        return event_stream(iter([sse("delta", {"text": reply}), sse("done", response.model_dump())]))
     message, history, query, hits, messages, cache_key = await prepare(req)
 
     async def events():
@@ -369,23 +462,30 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             return
         parts: list[str] = []
         model = None
+        cut_off = False
         try:
             async for kind, value in llm.stream(messages):
                 if kind == "model":
                     model = value
+                elif kind == "cut":
+                    cut_off = True
                 else:
                     parts.append(value)
                     yield sse("delta", {"text": value})
         except LLMError as exc:
             log.warning("LLM unavailable, answering from retrieved facts: %s", exc)
         if parts:
+            if cut_off:
+                note = f"\n\n{CUT_OFF_NOTE}"
+                parts.append(note)
+                yield sse("delta", {"text": note})
             response = finish(message, history, "".join(parts), hits, "llm", model)
         else:
-            fallback = retrieval_answer(query, hits)
+            fallback = retrieval_answer(query, hits, history)
             yield sse("delta", {"text": fallback})
             response = finish(message, history, fallback, hits, "retrieval", None)
-        remember(cache_key, response)
+        if not cut_off:  # never serve a half answer to the next person
+            remember(cache_key, response)
         yield sse("done", response.model_dump())
 
-    return StreamingResponse(events(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return event_stream(events())

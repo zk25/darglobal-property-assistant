@@ -1,0 +1,14 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# local files
+.DS_Store
+.pipeline-server.log
